@@ -356,3 +356,28 @@ func builderWithoutParallel() func(t *testing.T) {
 		fmt.Println("test from builder without parallel")
 	}
 }
+
+func TestUsingHelper(t *testing.T) {
+	testHelperWithParallel(t)
+}
+
+func testHelperWithParallel(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+}
+
+func TestUsingHelperWithoutHelper(t *testing.T) {
+	testHelperWithoutHelper(t)
+}
+
+func testHelperWithoutHelper(t *testing.T) {
+	t.Parallel()
+}
+
+func TestUsingHelperWithoutParallel(t *testing.T) { // want "Function TestUsingHelperWithoutParallel missing the call to method parallel"
+	testHelperWithoutParallel(t)
+}
+
+func testHelperWithoutParallel(t *testing.T) {
+	t.Helper()
+}
