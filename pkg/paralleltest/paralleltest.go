@@ -5,6 +5,7 @@ import (
 	"go/ast"
 	"go/types"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/analysis"
 )
@@ -33,6 +34,7 @@ type parallelAnalyzer struct {
 	ignoreMissingSubtests bool
 	ignoreLoopVar         bool
 	checkCleanup          bool
+	mutex                 sync.Mutex
 	funcDecls             map[string]funcInfo
 }
 
@@ -358,6 +360,9 @@ func (a *parallelAnalyzer) checkBuilderFunctionForParallel(pass *analysis.Pass, 
 }
 
 func (a *parallelAnalyzer) run(pass *analysis.Pass) (any, error) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
 	// Collect all function declarations from test files
 	for _, file := range pass.Files {
 		if !strings.HasSuffix(pass.Fset.File(file.Pos()).Name(), "_test.go") {
