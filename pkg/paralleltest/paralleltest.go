@@ -563,25 +563,41 @@ func (a *parallelAnalyzer) hasParallelInHelpers(
 	defer func() { delete(visited, funcDecl.Name.Name) }()
 
 	for _, stmt := range funcDecl.Body.List {
-		switch s := stmt.(type) {
-		case *ast.ExprStmt:
-			if call, ok := s.X.(*ast.CallExpr); ok {
-				// Check for direct t.Parallel
-				if methodParallelIsCalledInTestFunction(call, paramName) {
-					return true
-				}
-				// Check for calls to unexported helpers
-				if ident, ok := call.Fun.(*ast.Ident); ok {
-					if info, exists := a.funcDecls[ident.Name]; exists && !ast.IsExported(ident.Name) {
-						if isReceivingTestContext, helperParamName := isFunctionReceivingTestContext(info.decl); isReceivingTestContext {
-							if a.hasParallelInHelpers(info.decl, helperParamName, visited) {
-								return true
-							}
-						}
-					}
-				}
-			}
+		s, ok := stmt.(*ast.ExprStmt)
+		if !ok {
+			continue
 		}
+
+		call, ok := s.X.(*ast.CallExpr)
+		if !ok {
+			continue
+		}
+
+		// Check for direct t.Parallel
+		if methodParallelIsCalledInTestFunction(call, paramName) {
+			return true
+		}
+
+		// Check for calls to unexported helpers
+		ident, ok := call.Fun.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		info, exists := a.funcDecls[ident.Name]
+		if !exists || ast.IsExported(ident.Name) {
+			continue
+		}
+		isReceivingTestContext, helperParamName := isFunctionReceivingTestContext(info.decl)
+		if !isReceivingTestContext {
+			continue
+		}
+
+		// Call the function recursively, process next depth
+		if !a.hasParallelInHelpers(info.decl, helperParamName, visited) {
+			continue
+		}
+
+		return true
 	}
 	return false
 }
