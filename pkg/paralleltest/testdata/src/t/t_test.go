@@ -381,3 +381,42 @@ func TestUsingHelperWithoutParallel(t *testing.T) { // want "Function TestUsingH
 func testHelperWithoutParallel(t *testing.T) {
 	t.Helper()
 }
+
+// Test case for issue #56: handle t.Parallel in fixtures
+func TestFixtureWithParallel(t *testing.T) {
+	newSUT(t)
+}
+
+func newSUT(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+}
+
+// Test case for nested helpers
+func TestNestedHelpersWithParallel(t *testing.T) {
+	outerHelper(t)
+}
+
+func outerHelper(t *testing.T) {
+	t.Helper()
+	innerHelper(t)
+}
+
+func innerHelper(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+}
+
+// Test case for helper without parallel (should still flag)
+func TestFixtureWithoutParallel(t *testing.T) { // want "Function TestFixtureWithoutParallel missing the call to method parallel"
+	newSUTWithoutParallel(t)
+}
+
+func newSUTWithoutParallel(t *testing.T) {
+	t.Helper()
+}
+
+// Test calling helper from different file
+func TestCrossFileHelper(t *testing.T) {
+	crossFileHelper(t)
+}
