@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/types"
 	"strings"
-	"sync"
 
 	"golang.org/x/tools/go/analysis"
 )
@@ -34,14 +33,10 @@ type parallelAnalyzer struct {
 	ignoreMissingSubtests bool
 	ignoreLoopVar         bool
 	checkCleanup          bool
-	mutex                 sync.Mutex
-	funcDecls             map[string]funcInfo
 }
 
 func newParallelAnalyzer() *parallelAnalyzer {
-	a := &parallelAnalyzer{
-		funcDecls: make(map[string]funcInfo),
-	}
+	a := &parallelAnalyzer{}
 
 	var flags flag.FlagSet
 	flags.BoolVar(&a.ignoreMissing, "i", false, "ignore missing calls to t.Parallel")
@@ -133,7 +128,11 @@ func (a *parallelAnalyzer) analyzeTestRun(pass *analysis.Pass, n ast.Node, testV
 	return analysis
 }
 
-func (a *parallelAnalyzer) analyzeTestFunction(pass *analysis.Pass, funcDecl *ast.FuncDecl) {
+func (a *parallelAnalyzer) analyzeTestFunction(
+	pass *analysis.Pass,
+	funcDecls map[string]funcInfo,
+	funcDecl *ast.FuncDecl,
+) {
 	var analysis testFunctionAnalysis
 
 	// Check runs for test functions only
@@ -231,7 +230,7 @@ func (a *parallelAnalyzer) analyzeTestFunction(pass *analysis.Pass, funcDecl *as
 
 			// Find the function in funcDecls cache
 			// handle only present & not exported function.
-			info, exists := a.funcDecls[ident.Name]
+			info, exists := funcDecls[ident.Name]
 			if !exists || ast.IsExported(ident.Name) {
 				return true
 			}
@@ -244,7 +243,7 @@ func (a *parallelAnalyzer) analyzeTestFunction(pass *analysis.Pass, funcDecl *as
 
 			// Check helper for t.Parallel call
 			visited := make(map[string]bool)
-			if a.hasParallelInHelpers(info.decl, helperParamName, visited) {
+			if a.hasParallelInHelpers(funcDecls, info.decl, helperParamName, visited) {
 				analysis.funcHasParallelMethod = true
 				return false
 			}
@@ -360,8 +359,7 @@ func (a *parallelAnalyzer) checkBuilderFunctionForParallel(pass *analysis.Pass, 
 }
 
 func (a *parallelAnalyzer) run(pass *analysis.Pass) (any, error) {
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
+	funcDecls := map[string]funcInfo{}
 
 	// Collect all function declarations from test files
 	for _, file := range pass.Files {
@@ -370,16 +368,16 @@ func (a *parallelAnalyzer) run(pass *analysis.Pass) (any, error) {
 		}
 		for _, decl := range file.Decls {
 			if funcDecl, ok := decl.(*ast.FuncDecl); ok {
-				a.funcDecls[funcDecl.Name.Name] = funcInfo{decl: funcDecl, file: file}
+				funcDecls[funcDecl.Name.Name] = funcInfo{decl: funcDecl, file: file}
 			}
 		}
 	}
 
 	// Analyze test functions
-	for _, info := range a.funcDecls {
+	for _, info := range funcDecls {
 		// Only analyze test functions
 		if isTest, _ := isTestFunction(info.decl); isTest {
-			a.analyzeTestFunction(pass, info.decl)
+			a.analyzeTestFunction(pass, funcDecls, info.decl)
 		}
 	}
 
@@ -556,6 +554,7 @@ func loopVarReferencedInRun(call *ast.CallExpr, vars []types.Object, typeInfo *t
 
 // hasParallelInHelpers recursively checks if a function or its unexported helpers call t.Parallel
 func (a *parallelAnalyzer) hasParallelInHelpers(
+	funcDecls map[string]funcInfo,
 	funcDecl *ast.FuncDecl,
 	paramName string,
 	visited map[string]bool,
@@ -588,7 +587,7 @@ func (a *parallelAnalyzer) hasParallelInHelpers(
 		if !ok {
 			continue
 		}
-		info, exists := a.funcDecls[ident.Name]
+		info, exists := funcDecls[ident.Name]
 		if !exists || ast.IsExported(ident.Name) {
 			continue
 		}
@@ -598,7 +597,7 @@ func (a *parallelAnalyzer) hasParallelInHelpers(
 		}
 
 		// Call the function recursively, process next depth
-		if !a.hasParallelInHelpers(info.decl, helperParamName, visited) {
+		if !a.hasParallelInHelpers(funcDecls, info.decl, helperParamName, visited) {
 			continue
 		}
 
