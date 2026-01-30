@@ -235,7 +235,7 @@ func (a *parallelAnalyzer) analyzeTestFunction(
 				return true
 			}
 
-			// Check if the function has testing.T as param ad get param name
+			// Check if the function has testing.T as param and get param name
 			isReceivingTestContext, helperParamName := isFunctionReceivingTestContext(info.decl)
 			if !isReceivingTestContext {
 				return true
@@ -559,10 +559,11 @@ func (a *parallelAnalyzer) hasParallelInHelpers(
 	paramName string,
 	visited map[string]bool,
 ) bool {
-	// Check for the cycle (recursion in helpers)
+	// Prevent infinite recursion in helper chains by tracking visited functions
 	if visited[funcDecl.Name.Name] {
 		return false
 	}
+
 	visited[funcDecl.Name.Name] = true
 	defer func() { delete(visited, funcDecl.Name.Name) }()
 
