@@ -420,3 +420,32 @@ func newSUTWithoutParallel(t *testing.T) {
 func TestCrossFileHelper(t *testing.T) {
 	crossFileHelper(t)
 }
+
+func TestRecursiveHelpersWithoutParallel(t *testing.T) { // want "Function TestRecursiveHelpersWithoutParallel missing the call to method parallel"
+	recursiveHelper1(t)
+}
+
+func recursiveHelper1(t *testing.T) {
+	t.Helper()
+	recursiveHelper2(t)
+}
+
+func recursiveHelper2(t *testing.T) {
+	t.Helper()
+	recursiveHelper1(t)
+}
+
+func TestRecursiveHelpersWithParallel(t *testing.T) {
+	recursiveHelper1Parallel(t)
+}
+
+func recursiveHelper1Parallel(t *testing.T) {
+	t.Helper()
+	recursiveHelper2Parallel(t)
+}
+
+func recursiveHelper2Parallel(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+	recursiveHelper1Parallel(t)
+}
